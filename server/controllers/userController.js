@@ -3,6 +3,13 @@ import bcrypt from "bcryptjs";
 import cloudinary from "../lib/cloudinary.js";
 import { generateToken } from "../lib/utils.js";
 
+const getPublicUser = (user) => {
+    const publicUser = user.toObject ? user.toObject() : {...user}
+    delete publicUser.password
+    return publicUser
+}
+
+const isNonEmptyString = (value) => typeof value === "string" && value.trim().length > 0
 
 // Signup a new user
 export const signup = async (req , res) => {
@@ -10,30 +17,44 @@ export const signup = async (req , res) => {
 
 
     try {
-        if(!fullName || !email || !password || !bio){
-            return res.json({success: false, message: "Missing Details"})
+        if(!isNonEmptyString(fullName) || !isNonEmptyString(email) || !isNonEmptyString(password) || !isNonEmptyString(bio)){
+            return res.status(400).json({success: false, message: "All fields are required"})
         }
 
-        const user = await User.findOne({email})
+        if (password.length < 6) {
+            return res.status(400).json({success: false, message: "Password must be at least 6 characters"})
+        }
+
+        const normalizedEmail = email.trim().toLowerCase()
+        const user = await User.findOne({email: normalizedEmail})
 
         if(user){
-            return res.json({success: false , message: "Account already exists"})
+            return res.status(409).json({success: false , message: "Account already exists"})
         }
 
         const salt = await bcrypt.genSalt(10)
         const hashedPassword = await bcrypt.hash(password, salt)
 
         const newUser = await User.create({
-            fullName, email, password: hashedPassword, bio 
+            fullName: fullName.trim(),
+            email: normalizedEmail,
+            password: hashedPassword,
+            bio: bio.trim()
         })
 
         const token = generateToken(newUser._id)
 
-        res.json({success: true, userData: newUser, token, message: "Account created successfully"})
+        res.status(201).json({
+            success: true,
+            userData: getPublicUser(newUser),
+            token,
+            message: "Account created successfully"
+        })
     } catch (error) {
-        console.log(error.message);
-        
-        res.json({success: false, message: error.message})
+        console.error(error.message)
+        const status = error.code === 11000 ? 409 : 500
+        const message = error.code === 11000 ? "Account already exists" : "Could not create account"
+        res.status(status).json({success: false, message})
     }
 }
 
@@ -42,20 +63,34 @@ export const signup = async (req , res) => {
 export const login = async (req, res) => {
     try {
         const {email, password} = req.body
-        const userData = await User.findOne({email})
+
+        if (!isNonEmptyString(email) || !isNonEmptyString(password)) {
+            return res.status(400).json({success: false, message: "Email and password are required"})
+        }
+
+        const userData = await User.findOne({email: email.trim().toLowerCase()}).select("+password")
+
+        if (!userData) {
+            return res.status(401).json({success: false, message: "Invalid credentials"})
+        }
 
         const isPasswordCorrect = await bcrypt.compare(password, userData.password)
 
         if(!isPasswordCorrect) {
-            return res.json({success: false, message: "Invalid credentials"})
+            return res.status(401).json({success: false, message: "Invalid credentials"})
         }
 
         const token = generateToken(userData._id)
 
-        res.json({success: true, userData, token, message: 'Login successful'})
+        res.json({
+            success: true,
+            userData: getPublicUser(userData),
+            token,
+            message: 'Login successful'
+        })
     } catch (error) {
-        console.log(error.message)
-        res.json({succes: false, message: error.message})
+        console.error(error.message)
+        res.status(500).json({success: false, message: "Could not log in"})
     }
 }
 
@@ -69,22 +104,29 @@ export const updateProfile = async (req,res) => {
     try {
         const {profilePic, bio, fullName} = req.body
 
-        const userId = req.user._id
-        let updateUser
-
-        if(!profilePic) {
-            updateUser = await User.findByIdAndUpdate(userId, {bio, fullName},
-                {new: true}
-            )
-        }else{
-            const upload = await cloudinary.uploader.upload(profilePic)
-
-            updateUser = await User.findByIdAndUpdate(userId, {profilePic: upload.secure_url, bio, fullName}, {new: true})
+        if (!isNonEmptyString(fullName) || !isNonEmptyString(bio)) {
+            return res.status(400).json({success: false, message: "Name and bio are required"})
         }
 
-        res.json({success: true, user: updateUser})
+        if (profilePic && (typeof profilePic !== "string" || !/^data:image\/(png|jpeg|webp);base64,/.test(profilePic))) {
+            return res.status(400).json({success: false, message: "Invalid profile image"})
+        }
+
+        const userId = req.user._id
+        const updates = {bio: bio.trim(), fullName: fullName.trim()}
+
+        if(profilePic) {
+            const upload = await cloudinary.uploader.upload(profilePic, {
+                folder: "quick-chat/profiles",
+                resource_type: "image"
+            })
+            updates.profilePic = upload.secure_url
+        }
+
+        const updateUser = await User.findByIdAndUpdate(userId, updates, {returnDocument: "after"})
+        res.json({success: true, user: getPublicUser(updateUser)})
     } catch (error) {
-        console.log(error.message);
-        res.json({success: false, message: error.message})
+        console.error(error.message)
+        res.status(500).json({success: false, message: "Could not update profile"})
     }
 }

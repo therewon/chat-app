@@ -1,16 +1,17 @@
-import React, { useContext, useEffect, useState } from 'react'
-import assets, { userDummyData } from '../assets/assets'
+import { useContext, useEffect, useState } from 'react'
+import avatarIcon from '../assets/avatar_icon.png'
 import { useNavigate } from 'react-router-dom'
-import { ChatContext } from '../../context/ChatContext'
-import { AuthContext } from '../../context/AuthContext'
+import { ChatContext } from '../../context/ChatContext.js'
+import { AuthContext } from '../../context/AuthContext.js'
 
 const Sidebar = () => {
 
-    const { getUsers, users, selectedUser, setSelectedUser, unseenMessages, setUnseenMessages} = useContext(ChatContext)
+    const { getUsers, users, selectedUser, selectUser, unseenMessages} = useContext(ChatContext)
 
     const { logout, onlineUsers } = useContext(AuthContext)
 
-    const [input, setInput] = useState(false)
+    const [input, setInput] = useState('')
+    const [isMenuOpen, setIsMenuOpen] = useState(false)
 
     const navigate = useNavigate()
 
@@ -18,50 +19,74 @@ const Sidebar = () => {
 
     useEffect(()=>{
         getUsers()
-    },[onlineUsers])
+    },[getUsers])
 
     return (
-        <div className={`bg-[#8185B2]/10 h-full p-5 rounded-r-xl overflow-y-scroll text-white ${selectedUser ? "max-md:hidden" : ""}`}>
-            <div className='pb-5'>
-                <div className='flex justify-between items-center'>
-                    <img src={assets.logo} alt="logo" className='max-w-40' />
-                    <div className='relative py-2 group'>
-                        <img src={assets.menu_icon} alt="Menu" className='max-h-5 cursor-pointer' />
-                        <div className='absolute top-full right-0 z-20 w-32 p-5 rounded-md bg-[#282142] border border-gray-600 text-gray-100 hidden group-hover:block'>
-                            <p onClick={() => navigate('/profile')} className='cursor-pointer text-sm' >Edit Profile</p>
-                            <hr className='my-2 border-t border-gray-500' />
-                            <p onClick={()=> logout()} className='cursor-pointer text-sm'>Logout</p>
+        <aside className={`conversation-sidebar ${selectedUser ? "mobile-hidden" : ""}`}>
+            <header className="sidebar-top">
+                <div className="sidebar-brand-row">
+                    <div className="brand-lockup compact">
+                        <span className="brand-name">ChatFree</span>
+                    </div>
+                    <div className="menu-wrap" onMouseLeave={() => setIsMenuOpen(false)}>
+                        <button
+                            type="button"
+                            className="sidebar-menu-button"
+                            onClick={() => setIsMenuOpen((open) => !open)}
+                            aria-label="Open account menu"
+                            aria-expanded={isMenuOpen}
+                        >
+                            •••
+                        </button>
+                        <div className={`account-menu ${isMenuOpen ? 'is-open' : ''}`}>
+                            <button type="button" onClick={() => { setIsMenuOpen(false); navigate('/profile') }}>Edit profile <span>↗</span></button>
+                            <button type="button" onClick={()=> { setIsMenuOpen(false); logout() }}>Log out <span>→</span></button>
                         </div>
                     </div>
                 </div>
 
-                <div className='bg-[#282142] rounded-full flex items-center gap-2 py-3 px-4 mt-5 '>
-                    <img src={assets.search_icon} alt="" className='w-3' />
-                    <input onChange={(e)=>setInput(e.target.value)} type="text" className='bg-transparent border-none outline-none text-white text-xs placeholder-[#c8c8c8] flex-1' placeholder='Search User ...' />
-                </div>
-            </div>
-
-            <div className='flex flex-col'>
-                {users.map((user, index) => (
-                    <div
-                        onClick={() => setSelectedUser(user)}
-                        key={index}
-                        className={`relative flex items-center gap-2 p-2 pl-4 rounded cursor-pointer max-sm:text-sm
-                    ${selectedUser?._id === user._id && 'bg-[#282142]/50'}`}>
-                        <img src={user?.profilePic || assets.avatar_icon} alt="" className='w-8.75 aspect-square rounded-full' />
-                        <div className='flex flex-col leading-5'>
-                            <p>{user.fullName}</p>
-                            {
-                                onlineUsers.includes(user._id)
-                                    ? <span className='text-green-400 text-xs'>Online</span>
-                                    : <span className='text-neutral-400 text-xs'>Offline</span>
-                            }
-                        </div>
-                        {unseenMessages[user._id] && <p className='absolute top-4 right-4 text-xs h-5 w-5 flex justify-center items-center rounded-full bg-violet-500/50'>{unseenMessages[user._id]}</p>}
+                <div className="sidebar-title-row">
+                    <div>
+                        <span className="section-kicker">INBOX</span>
+                        <h1>Messages</h1>
                     </div>
+                    <span className="user-count">{users.length}</span>
+                </div>
+
+                <label className="search-box">
+                    <span aria-hidden="true">⌕</span>
+                    <input onChange={(e)=>setInput(e.target.value)} value={input} type="search" placeholder="Search people" aria-label="Search people" />
+                </label>
+            </header>
+
+            <div className="conversation-list">
+                {filteredUsers.map((user) => (
+                    <button
+                        type="button"
+                        onClick={() => selectUser(user)}
+                        key={user._id}
+                        className={`conversation-item ${selectedUser?._id === user._id ? 'is-active' : ''}`}>
+                        <span className="avatar-wrap">
+                            <img src={user?.profilePic || avatarIcon} alt={`${user.fullName} profile`} />
+                            <span className={`presence-dot ${onlineUsers.includes(user._id) ? 'is-online' : ''}`}></span>
+                        </span>
+                        <span className="conversation-copy">
+                            <strong>{user.fullName}</strong>
+                            <span>{onlineUsers.includes(user._id) ? 'Available now' : 'Away for now'}</span>
+                        </span>
+                        {unseenMessages[user._id] && <span className="unread-count">{unseenMessages[user._id]}</span>}
+                        <span className="row-arrow" aria-hidden="true">›</span>
+                    </button>
                 ))}
+                {filteredUsers.length === 0 && (
+                    <div className="empty-list">
+                        <span>⌕</span>
+                        <p>No people found</p>
+                    </div>
+                )}
             </div>
-        </div>
+            <footer className="sidebar-footer"><span></span> Realtime connection</footer>
+        </aside>
     )
 }
 

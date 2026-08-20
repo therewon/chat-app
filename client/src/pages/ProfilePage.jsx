@@ -1,66 +1,129 @@
-import React, { useContext, useState } from 'react'
+import { useContext, useEffect, useMemo, useState } from 'react'
 import {useNavigate} from 'react-router-dom'
-import assets from '../assets/assets'
-import { AuthContext } from '../../context/AuthContext'
+import toast from 'react-hot-toast'
+import avatarIcon from '../assets/avatar_icon.png'
+import { AuthContext } from '../../context/AuthContext.js'
+
+const MAX_IMAGE_SIZE = 3 * 1024 * 1024
+
+const readFileAsDataUrl = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader()
+  reader.onload = () => resolve(reader.result)
+  reader.onerror = () => reject(new Error("Could not read the selected image"))
+  reader.readAsDataURL(file)
+})
 
 const ProfilePage = () => {
   const { authUser , updateProfile } = useContext(AuthContext)
 
   const [selectedImg, setSelectedImg] = useState(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const navigate = useNavigate()
-  const [name, setName] = useState(authUser.fullName)
-  const [bio, setBio] = useState(authUser.bio)
+  const [name, setName] = useState(authUser.fullName || '')
+  const [bio, setBio] = useState(authUser.bio || '')
+  const previewUrl = useMemo(
+    () => selectedImg ? URL.createObjectURL(selectedImg) : null,
+    [selectedImg]
+  )
+
+  useEffect(() => () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl)
+  }, [previewUrl])
+
+  const handleImageChange = (event) => {
+    const file = event.target.files[0]
+    if (!file) return
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file")
+      event.target.value = ""
+      return
+    }
+
+    if (file.size > MAX_IMAGE_SIZE) {
+      toast.error("Image must be smaller than 3 MB")
+      event.target.value = ""
+      return
+    }
+
+    setSelectedImg(file)
+  }
 
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if(!selectedImg) {
-      await updateProfile({fullName: name, bio})
-      navigate('/')
-      return; 
-    }
+    setIsSubmitting(true)
 
-    const reader = new FileReader()
-    reader.readAsDataURL(selectedImg)
-    reader.onload = async () => {
-      const base64Image = reader.result;
-      await updateProfile({profilePic: base64Image, fullName: name, bio})
-      navigate("/")
+    try {
+      const profilePic = selectedImg ? await readFileAsDataUrl(selectedImg) : undefined
+      const wasUpdated = await updateProfile({profilePic, fullName: name.trim(), bio: bio.trim()})
+      if (wasUpdated) navigate('/')
+    } catch (error) {
+      toast.error(error.message)
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
   return (
-    <div className='min-h-screen bg-cover bg-no-repeat flex items-center justify-center'>
-      <div className='w-5/6 max-w-2xl backdrop-blur-2xl text-gray-300 border-2 border-gray-600 flex items-center justify-between max-sm:flex-col-reverse rounded-lg'>
-        <form onSubmit={handleSubmit} className='flex flex-col gap-5 p-10 flex-1'>
-          <h3 className='text-lg'>Profile details</h3>
-          <label htmlFor="avatar" className='flex items-center gap-3 cursor-pointer'>
-            <input onChange={(e)=>setSelectedImg(e.target.files[0])} type="file" id='avatar' accept='.png, .jpg, .jpeg' hidden />
-            <img src={selectedImg ? URL.createObjectURL(selectedImg) : assets.avatar_icon} className={`w-12 h-12 ${selectedImg && 'rounded-full'}`} alt="" />
-            upload profile image
+    <main className="profile-page">
+      <button type="button" className="profile-back" onClick={() => navigate('/')}>
+        <span>←</span> Back to messages
+      </button>
+
+      <section className="profile-editor">
+        <aside className="profile-preview-panel">
+          <div className="brand-lockup compact">
+            <span className="brand-mark">Q</span>
+            <span className="brand-name">QuickChat</span>
+          </div>
+
+          <div className="profile-preview-content">
+            <span className="section-kicker">YOUR PROFILE</span>
+            <div className="profile-preview-avatar">
+              <img src={previewUrl || authUser.profilePic || avatarIcon} alt="Profile preview" />
+              <span></span>
+            </div>
+            <h1>{name || 'Your name'}</h1>
+            <p>{bio || 'Your bio will appear here.'}</p>
+          </div>
+
+          <p className="profile-preview-note">This is how people see you in conversations.</p>
+        </aside>
+
+        <form onSubmit={handleSubmit} className="profile-form-card">
+          <div className="profile-form-heading">
+            <span className="form-kicker">PERSONAL DETAILS</span>
+            <h2>Make it feel like you.</h2>
+            <p>Update your photo, display name and the short intro shown to your contacts.</p>
+          </div>
+
+          <label htmlFor="avatar" className="upload-card">
+            <input onChange={handleImageChange} type="file" id='avatar' accept='.png, .jpg, .jpeg, .webp' hidden />
+            <img src={previewUrl || authUser.profilePic || avatarIcon} alt="Profile preview" />
+            <span><strong>Change profile photo</strong><small>PNG, JPG or WEBP · Max 3 MB</small></span>
+            <b>＋</b>
           </label>
-          <input 
-            onChange={(e)=>setName(e.target.value)}
-            value={name} 
-            type="text" 
-            required 
-            placeholder='Your name' 
-            className='p-2 border border-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-violet-500'/>
-          <textarea 
-            name="" 
-            id=""
-            onChange={(e)=>setBio(e.target.value)}
-            value={bio}
-            placeholder='Write profile bio'
-            required
-            className='p-2 border border-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-violet-500'
-            rows={4}></textarea>
-            <button type="submit" className='bg-linear-to-r from-purple-400 to-violet-600 text-white p-2 rounded-full text-lg cursor-pointer'>Save</button>
+
+          <label className="field-group">
+            <span>Display name</span>
+            <input onChange={(e)=>setName(e.target.value)} value={name} type="text" required placeholder='Your name' />
+          </label>
+
+          <label className="field-group">
+            <span>Short bio</span>
+            <textarea onChange={(e)=>setBio(e.target.value)} value={bio} placeholder='Write profile bio' required rows={5}></textarea>
+          </label>
+
+          <div className="profile-actions">
+            <button type="button" className="secondary-action" onClick={() => navigate('/')}>Cancel</button>
+            <button type="submit" disabled={isSubmitting} className="primary-action profile-save">
+              <span>{isSubmitting ? "Saving..." : "Save changes"}</span><span>↗</span>
+            </button>
+          </div>
         </form>
-        <img className={`max-w-44 aspect-square rounded-full mx-10 max-sm:mt-10 ${selectedImg && 'rounded-full'}`} src={authUser.profilePic || assets.logo_icon} alt="" />
-      </div>
-      
-    </div>
+      </section>
+    </main>
   )
 }
 

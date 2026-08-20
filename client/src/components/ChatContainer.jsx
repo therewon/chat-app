@@ -1,9 +1,11 @@
-import React, { useContext, useEffect, useRef, useState } from 'react'
-import assets, { messagesDummyData } from '../assets/assets'
+import { useContext, useEffect, useRef, useState } from 'react'
+import avatarIcon from '../assets/avatar_icon.png'
 import { formatMessageTime } from '../lib/utils'
-import { ChatContext } from '../../context/ChatContext'
-import { AuthContext } from '../../context/AuthContext'
+import { ChatContext } from '../../context/ChatContext.js'
+import { AuthContext } from '../../context/AuthContext.js'
 import toast from 'react-hot-toast'
+
+const MAX_IMAGE_SIZE = 3 * 1024 * 1024
 
 const ChatContainer = () => {
 
@@ -16,10 +18,10 @@ const ChatContainer = () => {
 
   
   const handleSendMessage = async (e) => {
-    e.preventDefault()
-    if(input.trim() === "") return null;
-    await sendMessages({text: input.trim()})
-    setInput("")
+    e?.preventDefault()
+    if(input.trim() === "") return;
+    const wasSent = await sendMessages({text: input.trim()})
+    if (wasSent) setInput("")
   }
   
   // handle sending an image
@@ -29,11 +31,17 @@ const ChatContainer = () => {
       toast.error("select an image file")
       return;
     }
+
+    if (file.size > MAX_IMAGE_SIZE) {
+      toast.error("Image must be smaller than 3 MB")
+      e.target.value = ""
+      return
+    }
     const reader = new FileReader()
     
     reader.onloadend = async () => {
-      await sendMessages({image: reader.result})
-      e.target.value = ""
+      const wasSent = await sendMessages({image: reader.result})
+      if (wasSent) e.target.value = ""
     }
     reader.readAsDataURL(file)
     
@@ -43,7 +51,7 @@ const ChatContainer = () => {
     if(selectedUser){
       getMessages(selectedUser._id)
     }
-  },[selectedUser])
+  },[getMessages, selectedUser])
 
   useEffect(()=> {
     if(scrollEnd.current && messages){
@@ -52,53 +60,65 @@ const ChatContainer = () => {
   },[messages])
   
   return selectedUser ? (
-    <div className='h-full overflow-scroll relative backdrop-blur-lg'>
-      <div className='flex items-center gap-3 py-3 mx-4 border-b border-stone-500'>
-        <img src={selectedUser.profilePic || assets.avatar_icon} alt="" className='w-8 rounded-full'/>
-        <p className='flex-1 text-lg text-white flex items-center gap-2'>
-          {selectedUser.fullName} {onlineUsers.includes(selectedUser._id)}
-          <span className='w-2 h-2 rounded-full bg-green-500'></span>
-        </p>
-        <img onClick={()=>setSelectedUser(null)} src={assets.arrow_icon} alt="" className='md:hidden max-w-7'/>
-        <img src={assets.help_icon} alt="" className='max-md:hidden max-w-5' />
-      </div>
-      <div className='flex flex-col h-[calc(100%-120px)] overflow-y-scroll p-3 pb-6'>
-        {messages.map((msg,index)=> (
-            <div key={index} className={`flex items-end gap-2 justify-end ${msg.senderId !== authUser._id && 'flex-row-reverse'}`}>
+    <section className="chat-panel">
+      <header className="chat-header">
+        <button type="button" onClick={()=>setSelectedUser(null)} className="mobile-back" aria-label="Back to users">
+          ←
+        </button>
+        <span className="avatar-wrap header-avatar">
+          <img src={selectedUser.profilePic || avatarIcon} alt={`${selectedUser.fullName} profile`}/>
+          <span className={`presence-dot ${onlineUsers.includes(selectedUser._id) ? 'is-online' : ''}`}></span>
+        </span>
+        <div className="chat-person">
+          <strong>{selectedUser.fullName}</strong>
+          <span>{onlineUsers.includes(selectedUser._id) ? 'Online — replies quickly' : 'Offline — messages will be waiting'}</span>
+        </div>
+        <span className="secure-chip"><span>●</span> Private chat</span>
+      </header>
+
+      <div className="messages-feed">
+        <div className="day-marker"><span>Today</span></div>
+        {messages.map((msg)=> (
+            <div key={msg._id} className={`message-row ${msg.senderId === authUser._id ? 'is-own' : 'is-incoming'}`}>
+              <img className="message-avatar" src={msg.senderId === authUser._id ? authUser?.profilePic || avatarIcon : selectedUser?.profilePic || avatarIcon} alt="" />
+              <div className="message-stack">
                 {msg.image ? (
-                  <img src={msg.image} alt="" className='max-w-57.5 border border-gray-700 rounded-lg overflow-hidden mb-8' />
-                ): (
-                  <p className={`p-2 max-w-50 md:text-sm font-light rounded-lg mb-8 break-all bg-violet-500/30 text-white  
-                    ${msg.senderId === authUser._id ? 'rounded-br-none' : 'rounded-bl-none'}`}>{msg.text}</p>
+                  <button type="button" className="message-image" onClick={() => window.open(msg.image, '_blank', 'noopener,noreferrer')}>
+                    <img src={msg.image} alt="Shared attachment" />
+                  </button>
+                ) : (
+                  <p className="message-bubble">{msg.text}</p>
                 )}
-                <div className='text-center text-xs'>
-                  <img src={msg.senderId === authUser._id ? authUser?.profilePic || assets.avatar_icon : selectedUser?.profilePic || assets.avatar_icon} alt=""
-                  className='w-7 rounded-full' />
-                  <p className='text-gray-500'>{formatMessageTime(msg.createdAt)}</p>
-                </div>
+                <span className="message-time">{formatMessageTime(msg.createdAt)}</span>
+              </div>
             </div>
         ))}
-        <div ref={scrollEnd}>
-
-        </div>
+        <div ref={scrollEnd}></div>
       </div>
 
-      <div className='absolute bottom-0 left-0 right-0 flex items-center gap-3 p-3'>
-        <div className='flex-1 flex items-center bg-gray-100/12 px-3 rounded-full'>
-          <input type="text" onChange={(e)=> setInput(e.target.value)} value={input} onKeyDown={(e)=> e.key === "Enter" ? handleSendMessage(e) : null} placeholder='Send a message' className='flex-1 text-sm p-3 border-none rounded-lg outline-none text-white placeholder-gray-400'/>
-          <input onChange={handleSendImage} type="file" id='image' accept='image/png, image/jpeg' hidden />
-          <label htmlFor="image">
-            <img src={assets.gallery_icon} alt="" className='w-5 mr-2 cursor-pointer' />
-          </label>
-        </div>
-        <img onClick={handleSendMessage} src={assets.send_button} className='w-7 cursor-pointer' alt="" />
-      </div>
-    </div>
+      <form className="message-composer" onSubmit={handleSendMessage}>
+        <label htmlFor="image" className="attachment-button" title="Attach image">
+          <input onChange={handleSendImage} type="file" id='image' accept='image/png, image/jpeg, image/webp' hidden />
+          ＋
+        </label>
+        <input type="text" onChange={(e)=> setInput(e.target.value)} value={input} placeholder='Write a message...' className="composer-input" aria-label="Message" />
+        <button type="submit" className="composer-send" aria-label="Send message">
+          <span>Send</span><b>↗</b>
+        </button>
+      </form>
+    </section>
   ) : (
-    <div className='flex flex-col items-center justify-center gap-2 text-gray-500 bg-white/10 max-md:hidden'>
-      <img src={assets.logo_icon} className='max-w-16' alt="" />
-      <p className='text-lg font-medium text-white'>Chat anytime, anywhere</p>
-    </div>
+    <section className="empty-chat">
+      <span className="section-kicker">SELECT A CONVERSATION</span>
+      <div className="empty-orbit" aria-hidden="true">
+        <span className="orbit-dot one"></span>
+        <span className="orbit-dot two"></span>
+        <span className="orbit-dot three"></span>
+        <img src="/logo.png" alt="" className='w-35 rounded-full'/>
+      </div>
+      <h2>Your people,<br/><em>one place.</em></h2>
+      <p>Choose someone from your inbox and pick up right where you left off.</p>
+    </section>
   )
 }
 

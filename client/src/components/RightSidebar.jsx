@@ -1,38 +1,50 @@
-import React from 'react'
-import assets, { imagesDummyData } from '../assets/assets'
+import { useContext, useMemo } from 'react'
+import avatarIcon from '../assets/avatar_icon.png'
+import { ChatContext } from '../../context/ChatContext.js'
+import { AuthContext } from '../../context/AuthContext.js'
 
-const RightSidebar = ({ selectedUser }) => {
+const RightSidebar = () => {
+
+  const {selectedUser, messages} = useContext(ChatContext)
+  const {logout, onlineUsers} = useContext(AuthContext)
+  const msgImages = useMemo(
+    () => messages.filter((message) => message.image).map((message) => message.image),
+    [messages]
+  )
+
   return selectedUser && (
-    <div className={`bg-[#8185B2]/10 text-white w-full relative overflow-y-scroll ${selectedUser ? "max-md:hidden" : ""
-      }`}>
-      <div className='pt-16 flex flex-col items-center gap-2 text-xs font-light mx-auto'>
-        <img src={selectedUser?.profilePic || assets.avatar_icon} className='w-20 aspect-square rounded-full' alt="" />
-        <h1 className='px-10 text-xl font-medium mx-auto flex items-center gap-2'>
-          <p></p>
-          {selectedUser.fullName}
-        </h1>
-        <p className='px-10 mx-auto'>{selectedUser.bio}</p>
-      </div>
-
-      <hr className='border-[#ffffff50] my-4' />
-
-      <div className='px-5 text-xs'>
-        <p>Media</p>
-        <div className='mt-2 max-h-50 overflow-y-scroll grid grid-cols-2 gap-4 opacity-80'>
-          {imagesDummyData.map((url, index) => (
-            <div key={index} onClick={()=>window.open(url)} className='cursor-pointer rounded'>
-              <img src={url} alt="" className='h-full rounded-md' />
-            </div>
-          ))}
+    <aside className="profile-sidebar">
+      <span className="profile-rail-label">CONTACT DETAILS</span>
+      <div className="contact-hero">
+        <div className="contact-avatar-ring">
+          <img src={selectedUser?.profilePic || avatarIcon} alt={`${selectedUser.fullName} profile`} />
         </div>
+        <span className={`presence-chip ${onlineUsers.includes(selectedUser._id) ? 'is-online' : ''}`}>
+          <span></span>{onlineUsers.includes(selectedUser._id) ? 'Available now' : 'Currently away'}
+        </span>
+        <h2>{selectedUser.fullName}</h2>
+        <p>{selectedUser.bio || 'No bio shared yet.'}</p>
       </div>
 
-      <button className='absolute bottom-5 left-1/2 transform -translate-x-1/2
-      bg-linear-to-r from-purple-400 to-violet-600 text-white border-none
-      text-sm font-light py-2 px-20 rounded-full cursor-pointer'>
-        Logout
+      <section className="media-section">
+        <div className="panel-section-title">
+          <span>Shared media</span>
+          <b>{msgImages.length}</b>
+        </div>
+        <div className="media-grid">
+          {msgImages.map((url, index) => (
+            <button type="button" key={url + index} onClick={()=>window.open(url, '_blank', 'noopener,noreferrer')}>
+              <img src={url} alt="Shared media" />
+            </button>
+          ))}
+          {msgImages.length === 0 && <p className="empty-media">Shared photos will appear here.</p>}
+        </div>
+      </section>
+
+      <button type="button" onClick={logout} className="logout-action">
+        <span>Log out</span><span>→</span>
       </button>
-    </div>
+    </aside>
   )
 }
 

@@ -1,6 +1,5 @@
-import React, { useContext, useState } from 'react'
-import assets from '../assets/assets'
-import { AuthContext } from '../../context/AuthContext'
+import { useContext, useState } from 'react'
+import { AuthContext } from '../../context/AuthContext.js'
 
 const LoginPage = () => {
   const [currState, setCurrState] = useState('Sign up')
@@ -9,88 +8,118 @@ const LoginPage = () => {
   const [password, setPassword] = useState('')
   const [bio, setBio] = useState('')
   const [isDataSubmitted, setIsDataSubmitted] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const { login } = useContext(AuthContext)
 
-  const onSubmitHandler = (event) => {
+  const onSubmitHandler = async (event) => {
     event.preventDefault()
     if (currState === "Sign up" && !isDataSubmitted) {
       setIsDataSubmitted(true)
       return;
     }
-    login(currState === "Sign up" ? "signup" : "login", {
-      fullName,
-      email,
+
+    setIsSubmitting(true)
+    await login(currState === "Sign up" ? "signup" : "login", {
+      fullName: fullName.trim(),
+      email: email.trim(),
       password,
-      bio,
-    });
+      bio: bio.trim(),
+    })
+    setIsSubmitting(false)
   }
   return (
-    <div className='min-h-screen bg-cover bg-center flex items-center justify-center gap-8 sm:justify-evenly max-sm:flex-col backdrop-blur-2xl'>
+    <main className="auth-page">
+      <section className="auth-visual" aria-label="QuickChat introduction">
+        <div className="brand-lockup">
+          <span className="brand-name">ChatFree</span>
+        </div>
 
-      <img src={assets.logo_big} className='w-[min(30vw,250px)]' alt="" />
+        <div className="auth-story">
+          <span className="eyebrow">CONVERSATIONS, REFOCUSED</span>
+          <h1>Make room for<br/><em>real connection.</em></h1>
+          <p>A calmer space for the people who matter. Fast messages, shared moments, zero clutter.</p>
+        </div>
 
-      <form onSubmit={onSubmitHandler} className='border-2 bg-white/8 text-white border-gray-500 p-6 flex flex-col gap-6 rounded-lg shadow-lg'>
-        <h2 className='font-medium text-2xl flex justify-between items-center'>
-          {currState}
-          {isDataSubmitted && <img onClick={() => setIsDataSubmitted(false)} src={assets.arrow_icon} className='w-5 cursor-pointer' alt="" />}
-        </h2>
+        <div className="auth-proof">
+          <div><strong>01</strong><span>Private by design</span></div>
+          <div><strong>02</strong><span>Present on every device</span></div>
+          <div><strong>03</strong><span>Built for everyday moments</span></div>
+        </div>
+      </section>
+
+      <section className="auth-form-panel">
+        <form onSubmit={onSubmitHandler} className="auth-card">
+          <div className="auth-card-head">
+            <div>
+              <span className="form-kicker">
+                {currState === "Sign up" ? (isDataSubmitted ? "STEP 2 OF 2" : "START HERE") : "WELCOME BACK"}
+              </span>
+              <h2>{currState === "Login" ? "Sign in to your space" : isDataSubmitted ? "Tell us about you" : "Create your account"}</h2>
+              <p>{currState === "Login" ? "Your conversations are waiting." : isDataSubmitted ? "A short bio helps people recognize you." : "Set up your profile in under a minute."}</p>
+            </div>
+          {isDataSubmitted && (
+            <button type="button" className="icon-button" onClick={() => setIsDataSubmitted(false)} aria-label="Back to account details">
+              ←
+            </button>
+          )}
+          </div>
 
         {
           currState === 'Sign up' && !isDataSubmitted && (
-            <input
-              type="text"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              className="p-2 border border-gray-500 rounded-md focus:outline-none"
-              placeholder="Full Name"
-              required
-            />
+            <label className="field-group">
+              <span>Full name</span>
+              <input type="text" value={fullName} autoComplete="name" onChange={(e) => setFullName(e.target.value)} placeholder="How should people know you?" required />
+            </label>
           )
         }
 
         {
           !isDataSubmitted && (
             <>
-              <input onChange={(e) => setEmail(e.target.value)} value={email} type="email" placeholder='Email Address' required className='p-2
-              border border-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500'/>
-              <input onChange={(e) => setPassword(e.target.value)} value={password} type="password" placeholder='Password' required className='p-2
-              border border-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500'/>
+              <label className="field-group">
+                <span>Email address</span>
+                <input onChange={(e) => setEmail(e.target.value)} value={email} type="email" autoComplete="email" placeholder="you@example.com" required />
+              </label>
+              <label className="field-group">
+                <span>Password</span>
+                <input onChange={(e) => setPassword(e.target.value)} value={password} type="password" autoComplete={currState === "Sign up" ? "new-password" : "current-password"} minLength={6} placeholder="At least 6 characters" required />
+              </label>
             </>
           )
         }
 
         {
           currState === "Sign up" && isDataSubmitted && (
-            <textarea
-              onChange={(e) => setBio(e.target.value)}
-              value={bio}
-              rows={4}
-              className='p-2 border border-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500'
-              placeholder='provide a short bio...'
-              required
-            ></textarea>
+            <label className="field-group">
+              <span>Short bio</span>
+              <textarea onChange={(e) => setBio(e.target.value)} value={bio} rows={5} placeholder="A few words about you..." required></textarea>
+            </label>
           )
         }
 
-        <button type='submit' className='py-3 bg-linear-to-r from-purple-400 to-violet-600 text-white rounded-md cursor-pointer'>
-          {currState === "Sign up" ? "Create Account" : "Login Now"}
+        <button type='submit' disabled={isSubmitting} className="primary-action">
+          <span>{isSubmitting ? "Please wait..." : currState === "Login" ? "Sign in" : isDataSubmitted ? "Create account" : "Continue"}</span>
+          <span aria-hidden="true">↗</span>
         </button>
 
-        <div className='flex items-center gap-2 text-sm text-gray-500'>
-          <input type="checkbox" />
-          <p>Agree to the terms of use & privacy policy.</p>
-        </div>
+        {currState === "Sign up" && (
+          <label className="terms-row">
+            <input type="checkbox" required />
+            <span>I agree to the terms of use and privacy policy.</span>
+          </label>
+        )}
 
-        <div className='flex flex-col gap-2'>
-          {
-            currState === "Sign up" ? (
-              <p className='text-sm text-gray-600'>Already have an account? <span className='font-medium text-violet-500 cursor-pointer' onClick={() => { setCurrState("Login"); setIsDataSubmitted(false) }}>Login here</span></p>
-            ) : (<p className='text-sm text-gray-600'>Create an account <span className='font-medium text-violet-500 cursor-pointer' onClick={() => setCurrState("Sign up")}>Click here</span></p>)
-          }
-        </div>
-      </form>
-    </div>
+          <p className="auth-switch">
+            {currState === "Sign up" ? "Already have an account?" : "New to QuickChat?"}
+            <button type="button" onClick={() => { setCurrState(currState === "Sign up" ? "Login" : "Sign up"); setIsDataSubmitted(false) }}>
+              {currState === "Sign up" ? "Sign in" : "Create an account"}
+            </button>
+          </p>
+        </form>
+        <p className="auth-footnote">Your conversations stay yours.</p>
+      </section>
+    </main>
   )
 }
 
